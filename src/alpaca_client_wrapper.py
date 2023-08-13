@@ -20,7 +20,7 @@ class AplacaClientWrapper:
     def buy(
         self,
         symbol: str,
-        dollar_amount: float,
+        dollar_amount: str,
         time_in_force: TimeInForce = TimeInForce.DAY,
     ):
         """
