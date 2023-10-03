@@ -26,7 +26,7 @@ export class AlpacaStack extends Stack {
       code: dockerImage,
       environment: {
         PYTHONPATH: "/var/runtime:/opt",
-        BUY_AMOUNT_USD: "20",
+        BUY_AMOUNT_USD: "25",
         BUY_SYMBOL: "VOO",
         API_KEY_SECRET_NAME: apiKeySecret.secretName,
         SECRET_KEY_SECRET_NAME: secretKeySecret.secretName,
