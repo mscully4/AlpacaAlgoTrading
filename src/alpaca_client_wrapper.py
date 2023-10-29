@@ -21,7 +21,7 @@ class AplacaClientWrapper:
         self,
         symbol: str,
         dollar_amount: str,
-        time_in_force: TimeInForce = TimeInForce.DAY,
+        time_in_force: TimeInForce = TimeInForce.GTC,
     ):
         """
         A method for buying a certain dollar amount of a stock

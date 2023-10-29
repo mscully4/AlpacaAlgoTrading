@@ -72,7 +72,10 @@ def send_sms_message(client: TwilioClient, to: str, from_: str, msg: str):
 def run_buy_flow(
     wrapper: AplacaClientWrapper, twilio_client: TwilioClient, env: Dict[str, str]
 ):
-    if not wrapper.is_market_open():
+    check_if_markets_are_open = (
+        env[EnvironmentVariables.CHECK_IF_MARKETS_ARE_OPEN] == "true"
+    )
+    if check_if_markets_are_open and not wrapper.is_market_open():
         send_sms_message(
             twilio_client,
             to=get_secret(env[EnvironmentVariables.TWILIO_TO_PHONE_NUMBER_SECRET_NAME]),
