@@ -15,6 +15,11 @@ interface AlpacaSecrets {
   secretKeySecret: ISecret;
 }
 
+enum FunctionHandlers {
+  US_EQUITY = "US_EQUITY",
+  CRYPTO = "CRYPTO",
+}
+
 export interface AlpacaStackProps extends StackProps {
   twilioSecrets: TwilioSecrets;
 }
@@ -35,7 +40,8 @@ export class AlpacaStack extends Stack {
       "VOO",
       25,
       alpacaSecrets,
-      props.twilioSecrets
+      props.twilioSecrets,
+      FunctionHandlers.US_EQUITY
     );
 
     this.createFunctionInvocationRule("Buy-VOO-Rule", buyVOOFunction, {
@@ -50,7 +56,8 @@ export class AlpacaStack extends Stack {
       "BTC/USD",
       10,
       alpacaSecrets,
-      props.twilioSecrets
+      props.twilioSecrets,
+      FunctionHandlers.CRYPTO
     );
 
     this.createFunctionInvocationRule("Buy-BTC-Rule", buyBTCFunction, {
@@ -67,7 +74,7 @@ export class AlpacaStack extends Stack {
     buyAmountUsd: number,
     alpacaSecrets: AlpacaSecrets,
     twilioSecrets: TwilioSecrets,
-    checkIfMarketsAreOpen: boolean = false
+    functionHandler: FunctionHandlers
   ) {
     const functionName = `Buy-${symbol.replace("/", "-")}-Function`;
     // new DockerImageFunction
@@ -76,6 +83,7 @@ export class AlpacaStack extends Stack {
       memorySize: 1024,
       timeout: Duration.minutes(2),
       code: this.code,
+      retryAttempts: 0,
       environment: {
         PYTHONPATH: "/var/runtime:/opt",
         BUY_AMOUNT_USD: buyAmountUsd.toString(),
@@ -89,7 +97,7 @@ export class AlpacaStack extends Stack {
           twilioSecrets.fromPhoneNumberSecret.secretName,
         TWILIO_TO_PHONE_NUMBER_SECRET_NAME:
           twilioSecrets.toPhoneNumberSecret.secretName,
-        CHECK_IF_MARKETS_ARE_OPEN: `${checkIfMarketsAreOpen}`,
+        FUNCTION_HANDLER: functionHandler.toString(),
       },
     });
 

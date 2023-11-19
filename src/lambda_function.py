@@ -1,102 +1,67 @@
 import logging
-import os
-
 import boto3
 from alpaca.trading.client import TradingClient
 from aws_lambda_powertools.utilities.data_classes import EventBridgeEvent, event_source
-
-from alpaca_client_wrapper import AplacaClientWrapper
-from utils.environment import EnvironmentVariables, assert_runtime_environment
-from utils.logging import configure_logging
-from typing import Dict
 from twilio.rest import Client as TwilioClient
+from alpaca.trading.enums import TimeInForce
+from utils.boto3.secrets import get_secret
 
-required_env_vars = [
-    EnvironmentVariables.API_KEY_SECRET_NAME,
-    EnvironmentVariables.SECRET_KEY_SECRET_NAME,
-    EnvironmentVariables.BUY_AMOUNT_USD,
-    EnvironmentVariables.BUY_SYMBOL,
-    EnvironmentVariables.TWILIO_ACCOUNT_SID_SECRET_NAME,
-    EnvironmentVariables.TWILIO_AUTH_TOKEN_SECRET_NAME,
-    EnvironmentVariables.TWILIO_FROM_PHONE_NUMBER_SECRET_NAME,
-    EnvironmentVariables.TWILIO_TO_PHONE_NUMBER_SECRET_NAME,
-]
+from utils.alpaca_client_wrapper import AlpacaClientWrapper
+from utils.environment import EnvironmentConfig
+from utils.logging import configure_logging
+from flows.buy_flow import run_buy_flow
+from utils.twilio_wrapper import TwilioClientWrapper
 
 configure_logging(logging.INFO)
 
 logger = logging.getLogger(__name__)
 
 
-def get_secret(secret_name: str):
-    client_secrets = boto3.client("secretsmanager")
-
-    response = client_secrets.get_secret_value(SecretId=secret_name)
-
-    return response["SecretString"]
-
-
 @event_source(data_class=EventBridgeEvent)
 def lambda_handler(event: EventBridgeEvent, context):
 
-    env = dict(os.environ)
-    assert_runtime_environment(env, required_env_vars)
+    env_config = EnvironmentConfig.from_environment()
+
+    session = boto3.Session()
 
     # Retrieve credentials stored in SecretsManager
-    api_key = get_secret(env[EnvironmentVariables.API_KEY_SECRET_NAME])
-    secret_key = get_secret(env[EnvironmentVariables.SECRET_KEY_SECRET_NAME])
+    api_key = get_secret(session, env_config.api_key_secret_name)
+    secret_key = get_secret(session, env_config.secret_key_secret_name)
 
     # Generate the Alpaca Client Wrapper
-    client = TradingClient(api_key, secret_key, paper=False)
-    wrapper = AplacaClientWrapper(client=client)
+    alpaca_client = TradingClient(api_key, secret_key, paper=False)
+    alpaca_wrapper = AlpacaClientWrapper(client=alpaca_client)
 
-    twilio_account_sid = get_secret(
-        env[EnvironmentVariables.TWILIO_ACCOUNT_SID_SECRET_NAME]
-    )
-    twilio_auth_token = get_secret(
-        env[EnvironmentVariables.TWILIO_AUTH_TOKEN_SECRET_NAME]
+    twilio_account_sid = get_secret(session, env_config.twilio_account_sid_secret_name)
+    twilio_auth_token = get_secret(session, env_config.twilio_auth_token_secret_name)
+    to_phone_number = get_secret(session, env_config.twilio_to_phone_number_secret_name)
+    from_phone_number = get_secret(
+        session, env_config.twilio_from_phone_number_secret_name
     )
 
     twilio_client = TwilioClient(twilio_account_sid, twilio_auth_token)
+    twilio_wrapper = TwilioClientWrapper(
+        twilio_client, from_phone_number, to_phone_number
+    )
 
     # Buy some stonks
-    run_buy_flow(wrapper, twilio_client, env)
-
-    return {"status_code": 202}
-
-
-def send_sms_message(client: TwilioClient, to: str, from_: str, msg: str):
-    client.messages.create(to=to, from_=from_, body=msg)
-    return
-
-
-def run_buy_flow(
-    wrapper: AplacaClientWrapper, twilio_client: TwilioClient, env: Dict[str, str]
-):
-    check_if_markets_are_open = (
-        env[EnvironmentVariables.CHECK_IF_MARKETS_ARE_OPEN] == "true"
-    )
-    if check_if_markets_are_open and not wrapper.is_market_open():
-        send_sms_message(
-            twilio_client,
-            to=get_secret(env[EnvironmentVariables.TWILIO_TO_PHONE_NUMBER_SECRET_NAME]),
-            from_=get_secret(
-                env[EnvironmentVariables.TWILIO_FROM_PHONE_NUMBER_SECRET_NAME]
-            ),
-            msg="Market is closed, didn't buy anything",
+    if env_config.function_handler == "US_EQUITY":
+        run_buy_flow(
+            alpaca_wrapper,
+            twilio_wrapper,
+            env_config.buy_symbol,
+            env_config.buy_amount_usd,
+            TimeInForce.DAY,
+            check_if_markets_are_open=True,
         )
-        logger.info("market is closed, exiting...")
         return
 
-    buy_symbol = env[EnvironmentVariables.BUY_SYMBOL]
-    qty_usd = env[EnvironmentVariables.BUY_AMOUNT_USD]
-    logger.info(f"Submitting request to buy ${buy_symbol} of {qty_usd}")
-    wrapper.buy(symbol=buy_symbol, dollar_amount=qty_usd)
-
-    send_sms_message(
-        twilio_client,
-        to=get_secret(env[EnvironmentVariables.TWILIO_TO_PHONE_NUMBER_SECRET_NAME]),
-        from_=get_secret(
-            env[EnvironmentVariables.TWILIO_FROM_PHONE_NUMBER_SECRET_NAME]
-        ),
-        msg=f"Bought ${qty_usd} of {buy_symbol}",
-    )
+    if env_config.function_handler == "CRYPTO":
+        run_buy_flow(
+            alpaca_wrapper,
+            twilio_wrapper,
+            env_config.buy_symbol,
+            env_config.buy_amount_usd,
+            TimeInForce.GTC,
+        )
+        return

@@ -7,7 +7,7 @@ from alpaca.trading.requests import MarketOrderRequest
 logger = logging.getLogger(__name__)
 
 
-class AplacaClientWrapper:
+class AlpacaClientWrapper:
     def __init__(self, client: TradingClient):
         self._client = client
 
@@ -21,7 +21,7 @@ class AplacaClientWrapper:
         self,
         symbol: str,
         dollar_amount: str,
-        time_in_force: TimeInForce = TimeInForce.GTC,
+        time_in_force: TimeInForce = TimeInForce.DAY,
     ):
         """
         A method for buying a certain dollar amount of a stock

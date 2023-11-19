@@ -1,19 +1,38 @@
-from typing import Dict, List
+from typing import Mapping
+import dataclasses
+import os
 
 
-class EnvironmentVariables:
-    API_KEY_SECRET_NAME = "API_KEY_SECRET_NAME"
-    SECRET_KEY_SECRET_NAME = "SECRET_KEY_SECRET_NAME"
-    BUY_AMOUNT_USD = "BUY_AMOUNT_USD"
-    BUY_SYMBOL = "BUY_SYMBOL"
-    TWILIO_ACCOUNT_SID_SECRET_NAME = "TWILIO_ACCOUNT_SID_SECRET_NAME"
-    TWILIO_AUTH_TOKEN_SECRET_NAME = "TWILIO_AUTH_TOKEN_SECRET_NAME"
-    TWILIO_FROM_PHONE_NUMBER_SECRET_NAME = "TWILIO_FROM_PHONE_NUMBER_SECRET_NAME"
-    TWILIO_TO_PHONE_NUMBER_SECRET_NAME = "TWILIO_TO_PHONE_NUMBER_SECRET_NAME"
-    CHECK_IF_MARKETS_ARE_OPEN = "CHECK_IF_MARKETS_ARE_OPEN"
+def _get_default_or_mapping_item(
+    field: dataclasses.Field, mapping: Mapping[str, str]
+) -> str:
+    if field.default is not dataclasses.MISSING and field.name.upper() not in mapping:
+        return field.default
+
+    return field.type(mapping[field.name.upper()])
 
 
-def assert_runtime_environment(env: Dict[str, str], required_env_vars: List[str]):
-    for env_var in required_env_vars:
-        if env_var not in env:
-            raise KeyError(f"Environment variable {env_var} does not exist")
+@dataclasses.dataclass
+class EnvironmentConfig:
+    api_key_secret_name: str
+    secret_key_secret_name: str
+    buy_amount_usd: str
+    buy_symbol: str
+    twilio_account_sid_secret_name: str
+    twilio_auth_token_secret_name: str
+    twilio_from_phone_number_secret_name: str
+    twilio_to_phone_number_secret_name: str
+    function_handler: str
+
+    @classmethod
+    def from_environment(cls, env: Mapping[str, str] = os.environ):
+        kwargs = {
+            field.name: _get_default_or_mapping_item(field, env)
+            for field in dataclasses.fields(cls)
+        }
+        return cls(**kwargs)
+
+
+if __name__ == "__main__":
+    config = EnvironmentConfig.from_environment()
+    print(config)
